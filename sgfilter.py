@@ -215,6 +215,60 @@ def sg_filter_gram(signal, window, order, method = 'vector'):
             filterArr = weightArr * signalSeg
             filterSeg = np.sum(filterArr, axis=1)
             firstSeg = filterSeg[0:m+2]
+        elif idx + m >= signalLen:
+            # print("last window")
+            rightIdx = (2*m + 1)
+            signalSeg = np.asarray(signal[signalLen - rightIdx:signalLen])
+            filterArr = weightArr * signalSeg
+            filterSeg = np.sum(filterArr, axis=1)
+            lastSeg = filterSeg[m+1:2*m+1]
+            break
+            # sgFilter = filterSeg[signalLen-m:signalLen]
+        else:
+            rightIdx = (idx + 2*m + 1)
+            signalSeg = np.asarray(signal[idx - m:idx + m + 1])
+            ### old method ###
+            # filterArr = weightArr * signalSeg
+            # filterSeg = np.sum(filterArr, axis = 1)
+            # filterPoint = filterSeg[m+1]
+            ### new method ###
+            filterArr = weightArr[m+1] * signalSeg
+            filterPoint = np.sum(filterArr)
+            sgFilter[idx] = filterPoint
+    # print("filter complete")
+        
+    # append first and last segments to the sg filter array
+    sgFilter[0:m+2] = firstSeg
+    sgFilter[signalLen-(m):signalLen] = lastSeg
+    
+    return sgFilter
+
+def sg_filter_gram_fast(signal, window, order, method = 'vector'):
+    
+    signalLen = len(signal)
+    m =  window
+    n = order
+    
+    if method == 'new':
+        weightArr = np.zeros((2*m+1, 2*m+1))
+        for i in range(-m, m+1):
+            for t in range(-m, m+1):
+                weightArr[i + m, t + m] = 1*conv_weight(i,t,m,n, method = method)
+    if method == 'vector':
+        i = np.arange(-m, m+1)
+        t = np.arange(-m, m+1)
+        weightArr = 1*conv_weight(i,t,m,n, method = method )
+    
+    # print("calc weights")
+
+    sgFilter = pd.Series(0., index = np.arange(signalLen))
+    for idx in range(m+1, signalLen-1):
+        if idx <= m+1:
+            # print("first window")
+            signalSeg = np.asarray(signal[0:2*m + 1])
+            filterArr = weightArr * signalSeg
+            filterSeg = np.sum(filterArr, axis=1)
+            firstSeg = filterSeg[0:m+2]
             # sgFilter[0:m] = filterSeg[0:m]
             # break
         elif idx + m >= signalLen:
@@ -231,10 +285,10 @@ def sg_filter_gram(signal, window, order, method = 'vector'):
             rightIdx = (idx + 2*m + 1)
             # print(idx, str(2*m +1))
             signalSeg = np.asarray(signal[idx - m:idx + m + 1])
-            filterArr = weightArr * signalSeg
-            filterSeg = np.sum(filterArr, axis = 1)
+            filterArr = weightArr[:, m+1] * signalSeg
+            filterPoint = np.sum(filterArr, axis = 1)
             # print(idx, m+1 + idx)
-            filterPoint = filterSeg[m+1]
+            # filterPoint = filterSeg[m+1]
             sgFilter[idx] = filterPoint
             # break
     # print("filter complete")
@@ -273,6 +327,27 @@ def n_opt(signal, sigma = "auto", method = 'vector'):
         dy = sg_filter_gram(yPrime, n1, k, method = method)
         d2y = np.diff(sg_filter_gram(dy, n1, k, method = method))
         d3y = np.diff(sg_filter_gram(d2y, n1, k, method = method))
+        c1 = np.mean(d3y**2)
+        num = 2*(k + 2)*(np.math.factorial(2*k + 3))**2
+        denom = (np.math.factorial(k + 1))**2
+        root = (2*k + 5)
+        nOpt = ((num/denom)*(sigma/c1))**(1/root)
+    return int(n1)
+
+def n_opt_fast(signal, sigma = "auto", method = 'vector'):
+    nOpt = 3
+    n1 = 1
+    if (sigma == "auto"):
+        sigma = noise(signal)
+    while np.abs(nOpt-n1) > 1:
+        k = 2
+        n1 = int(2*np.floor(nOpt/2) + 1)
+        print('n1 = ' +str(n1))
+        y = sg_filter_gram_fast(signal, n1, k, method = method)
+        yPrime = np.diff(y)
+        dy = sg_filter_gram_fast(yPrime, n1, k, method = method)
+        d2y = np.diff(sg_filter_gram_fast(dy, n1, k, method = method))
+        d3y = np.diff(sg_filter_gram_fast(d2y, n1, k, method = method))
         c1 = np.mean(d3y**2)
         num = 2*(k + 2)*(np.math.factorial(2*k + 3))**2
         denom = (np.math.factorial(k + 1))**2
