@@ -64,7 +64,9 @@ def gen_fact(a, b, method = 'vector'):
         fact = sp.vectorize(spFact, otypes='O')
         diff = a - b
         diffBool = (a-b>=0)*1
-        gf = np.clip(fact(a)/fact(np.abs(diff))*diffBool, 0, None)
+        num = fact(a, exact=True)
+        denom = fact(np.abs(diff), exact=True)
+        gf = np.clip(num/denom*diffBool, 0, None)
         return gf
     
     
